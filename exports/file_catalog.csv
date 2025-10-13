@@ -1,0 +1,11 @@
+File,Path,Short Description,Functionality Summary
+User.php,app/Models/User.php,User Model,Represents users with roles (customer, staff, admin). Includes helper methods isAdmin/isStaff/isCustomer and authentication-related casts.
+Service.php,app/Models/Service.php,Service Model,Represents bookable services (name, description, price, duration, image_path). Used in listings and bookings.
+Booking.php,app/Models/Booking.php,Booking Model,Customer-created bookings linking to a service, customer and optional assigned staff; tracks scheduled_at and status.
+RoleMiddleware.php,app/Http/Middleware/RoleMiddleware.php,Role Middleware,Restricts web routes to specific user roles (e.g., admin-only pages).
+AuthController.php,app/Http/Controllers/AuthController.php,Web Authentication,Handles registration and login (supports login by email or mobile), logout and redirects to services.
+ServiceController.php,app/Http/Controllers/ServiceController.php,Service Management (Web),CRUD operations for Services. Uses authorization to allow only admins to manage services.
+UserController.php,app/Http/Controllers/UserController.php,Admin User Management,Admin UI for viewing and editing users (change role, profile fields).
+BookingController.php,app/Http/Controllers/BookingController.php,Booking Logic,Manages bookings: index (role-filtered), store (customer create), edit/update, and assignStaff (admin confirms and assigns staff).
+DashboardController.php,app/Http/Controllers/DashboardController.php,Admin Dashboard,Displays key metrics: total users, total bookings, total revenue (sum of booking prices).
+ApiUserController.php,app/Http/Controllers/Api/UserController.php,User API (CRUD),RESTful endpoints for users: index, show, store, update, destroy, and checkMobile (for mobile clients).

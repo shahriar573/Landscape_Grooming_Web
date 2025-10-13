@@ -1,0 +1,652 @@
+LANDSCAPE GROOMING - FULL PROJECT CODE EXTRACT
+Generated: 2025-10-07
+
+This file contains all the main PHP files from the Laravel Service Booking Platform
+organized by category with clear separators for easy reference and extraction.
+
+Structure:
+- Models (User, Service, Booking)
+- Middleware (RoleMiddleware)
+- Controllers (Auth, Service, User, Booking, Dashboard, API)
+
+=============================================================================
+MODELS
+=============================================================================
+
+-----------------------------------------------------------------------------
+FILE: app/Models/User.php
+DESCRIPTION: User Model with roles (customer, staff, admin) and helper methods
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Models;
+
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+
+class User extends Authenticatable
+{
+    /** @use HasFactory<\Database\Factories\UserFactory> */
+    use HasFactory, Notifiable;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'name',
+        'email',
+        'mobile',
+        'password',
+        'role',
+    ];
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
+    }
+
+    /**
+     * Check if user is an Admin
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Check if user is Staff
+     */
+    public function isStaff(): bool
+    {
+        return $this->role === 'staff';
+    }
+
+    /**
+     * Check if user is a Customer
+     */
+    public function isCustomer(): bool
+    {
+        return $this->role === 'customer';
+    }
+}
+
+-----------------------------------------------------------------------------
+FILE: app/Models/Service.php
+DESCRIPTION: Service Model for bookable services (name, description, price, etc.)
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Service extends Model
+{
+    protected $fillable = ['name', 'description', 'price', 'duration', 'image_path'];
+}
+
+-----------------------------------------------------------------------------
+FILE: app/Models/Booking.php
+DESCRIPTION: Booking Model linking customers, services, and staff with scheduling
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Booking extends Model
+{
+    protected $fillable = ['service_id', 'customer_id', 'staff_id', 'scheduled_at', 'price', 'status', 'notes'];
+
+    protected $casts = [
+        'scheduled_at' => 'datetime',
+    ];
+
+    public function service() { return $this->belongsTo(Service::class); }
+    public function customer() { return $this->belongsTo(User::class, 'customer_id'); }
+    public function staff() { return $this->belongsTo(User::class, 'staff_id'); }
+}
+
+=============================================================================
+MIDDLEWARE
+=============================================================================
+
+-----------------------------------------------------------------------------
+FILE: app/Http/Middleware/RoleMiddleware.php
+DESCRIPTION: Role-based access control middleware for routes
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class RoleMiddleware
+{
+    /**
+     * Handle an incoming request.
+     * Example: ->middleware('role:admin')
+     */
+    public function handle(Request $request, Closure $next, string $role)
+    {
+        $user = Auth::user();
+
+        if (!$user || $user->role !== $role) {
+            abort(403, 'Unauthorized');
+        }
+
+        return $next($request);
+    }
+}
+
+=============================================================================
+WEB CONTROLLERS
+=============================================================================
+
+-----------------------------------------------------------------------------
+FILE: app/Http/Controllers/AuthController.php
+DESCRIPTION: Web Authentication - handles registration, login (email/mobile), logout
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class AuthController extends Controller
+{
+    public function showRegister()
+    {
+        return view('auth.register');
+    }
+
+    public function register(Request $request)
+    {
+        $v = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|unique:users,email',
+            'mobile' => 'nullable|string|unique:users,mobile',
+            'password' => 'required|string|min:6|confirmed',
+            'role' => 'nullable|in:customer,staff,admin'
+        ]);
+
+        $v['role'] = $v['role'] ?? 'customer';
+        $v['password'] = bcrypt($v['password']);
+
+        $user = User::create($v);
+        Auth::login($user);
+
+        return redirect()->route('services.index')
+            ->with('status', 'Registered & logged in');
+    }
+
+    public function showLogin()
+    {
+        return view('auth.login');
+    }
+
+    public function login(Request $request)
+    {
+        $v = $request->validate([
+            'email_or_mobile' => 'required|string',
+            'password' => 'required|string'
+        ]);
+
+        $field = filter_var($v['email_or_mobile'], FILTER_VALIDATE_EMAIL) ? 'email' : 'mobile';
+
+        if (Auth::attempt([$field => $v['email_or_mobile'], 'password' => $v['password']])) {
+            $request->session()->regenerate();
+            return redirect()->intended(route('services.index'));
+        }
+
+        return back()->withErrors(['email_or_mobile' => 'Invalid credentials'])->withInput();
+    }
+
+    public function logout(Request $request)
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        return redirect()->route('services.index');
+    }
+}
+
+-----------------------------------------------------------------------------
+FILE: app/Http/Controllers/ServiceController.php
+DESCRIPTION: Service Management (Web) - CRUD operations with admin authorization
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Service;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class ServiceController extends Controller
+{
+    public function index()
+    {
+        $services = Service::all();
+        return view('services.index', compact('services'));
+    }
+
+    public function show(Service $service)
+    {
+        return view('services.show', compact('service'));
+    }
+
+    // Admin: show form to create a service
+    public function create()
+    {
+        $this->authorize('create', Service::class);
+        return view('services.create');
+    }
+
+    // Admin: store a new service
+    public function store(Request $request)
+    {
+        $this->authorize('create', Service::class);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'price' => 'required|numeric',
+            'duration' => 'nullable|integer',
+            'image_path' => 'nullable|string',
+        ]);
+
+        Service::create($data);
+
+        return redirect()->route('services.index')->with('status', 'Service created.');
+    }
+
+    // Admin: edit form
+    public function edit(Service $service)
+    {
+        $this->authorize('update', $service);
+        return view('services.edit', compact('service'));
+    }
+
+    // Admin: update
+    public function update(Request $request, Service $service)
+    {
+        $this->authorize('update', $service);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'price' => 'required|numeric',
+            'duration' => 'nullable|integer',
+            'image_path' => 'nullable|string',
+        ]);
+
+        $service->update($data);
+
+        return redirect()->route('services.index')->with('status', 'Service updated.');
+    }
+
+    // Admin: destroy
+    public function destroy(Service $service)
+    {
+        $this->authorize('delete', $service);
+        $service->delete();
+        return redirect()->route('services.index')->with('status', 'Service deleted.');
+    }
+}
+
+-----------------------------------------------------------------------------
+FILE: app/Http/Controllers/UserController.php
+DESCRIPTION: Admin User Management - view and edit users (admin only)
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use Illuminate\Http\Request;
+
+class UserController extends Controller
+{
+    public function index()
+    {
+        $users = User::paginate(20);
+        return view('admin.users.index', compact('users'));
+    }
+
+    public function edit(User $user)
+    {
+        return view('admin.users.edit', compact('user'));
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|unique:users,email,' . $user->id,
+            'mobile' => 'nullable|string|unique:users,mobile,' . $user->id,
+            'role' => 'required|in:customer,staff,admin',
+        ]);
+
+        $user->update($data);
+
+        return redirect()->route('admin.users.index')->with('status', 'User updated.');
+    }
+}
+
+-----------------------------------------------------------------------------
+FILE: app/Http/Controllers/BookingController.php
+DESCRIPTION: Booking Logic - role-filtered index, customer create, admin assign staff
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Booking;
+use App\Models\Service;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class BookingController extends Controller
+{
+    public function __construct()
+    {
+        $this->middleware('auth')->except(['index', 'show']);
+    }
+
+    public function index()
+    {
+        $user = Auth::user();
+        $query = Booking::with(['service', 'customer', 'staff']);
+
+        if ($user) {
+            if ($user->isAdmin()) {
+                $bookings = $query->latest()->paginate(20);
+            } elseif ($user->isStaff()) {
+                $bookings = $query->where('staff_id', $user->id)->paginate(20);
+            } else {
+                $bookings = $query->where('customer_id', $user->id)->paginate(20);
+            }
+        } else {
+            $bookings = $query->where('status', 'confirmed')
+                              ->where('scheduled_at', '>=', now())
+                              ->paginate(12);
+        }
+
+        return view('bookings.index', compact('bookings'));
+    }
+
+    public function create(Request $request)
+    {
+        $services = Service::all();
+        $prefill = $request->query('service_id');
+        return view('bookings.create', compact('services', 'prefill'));
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'service_id' => 'required|exists:services,id',
+            'scheduled_at' => 'required|date|after:now',
+            'notes' => 'nullable|string|max:2000'
+        ]);
+
+        $service = Service::findOrFail($data['service_id']);
+
+        Booking::create([
+            'service_id' => $service->id,
+            'customer_id' => Auth::id(),
+            'scheduled_at' => $data['scheduled_at'],
+            'price' => $service->price,
+            'notes' => $data['notes'] ?? null,
+            'status' => 'pending',
+        ]);
+
+        return redirect()->route('bookings.index')
+            ->with('status', 'Booking created. Admin will assign staff.');
+    }
+
+    public function edit(Booking $booking)
+    {
+        $this->authorizeAction($booking);
+
+        $services = Service::all();
+        $staffs = User::where('role', 'staff')->get();
+
+        return view('bookings.edit', compact('booking', 'services', 'staffs'));
+    }
+
+    public function update(Request $request, Booking $booking)
+    {
+        $this->authorizeAction($booking);
+
+        $data = $request->validate([
+            'service_id' => 'required|exists:services,id',
+            'scheduled_at' => 'required|date|after:now',
+            'notes' => 'nullable|string|max:2000',
+            'staff_id' => 'nullable|exists:users,id',
+            'status' => 'nullable|in:pending,confirmed,in_progress,completed,cancelled'
+        ]);
+
+        $booking->update($data);
+
+        return redirect()->route('bookings.index')->with('status', 'Booking updated.');
+    }
+
+    public function destroy(Booking $booking)
+    {
+        $user = Auth::user();
+        if (!$user || (!$user->isAdmin() && $booking->customer_id !== $user->id)) {
+            abort(403);
+        }
+
+        $booking->delete();
+
+        return redirect()->route('bookings.index')->with('status', 'Booking deleted.');
+    }
+
+    public function assignStaff(Request $request, Booking $booking)
+    {
+        if (!Auth::user()->isAdmin()) abort(403);
+
+        $data = $request->validate(['staff_id' => 'required|exists:users,id']);
+
+        $booking->update(['staff_id' => $data['staff_id'], 'status' => 'confirmed']);
+
+        return redirect()->route('bookings.index')->with('status', 'Staff assigned.');
+    }
+
+    protected function authorizeAction(Booking $booking)
+    {
+        $user = Auth::user();
+        if (!$user) abort(403);
+        if ($user->isAdmin() || $booking->customer_id === $user->id) {
+            return true;
+        }
+        abort(403);
+    }
+}
+
+-----------------------------------------------------------------------------
+FILE: app/Http/Controllers/DashboardController.php
+DESCRIPTION: Admin Dashboard - displays key metrics (users, bookings, revenue)
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use App\Models\Booking;
+use App\Models\Service;
+
+class DashboardController extends Controller
+{
+    public function index()
+    {
+        $totalUsers = User::count();
+        $totalBookings = Booking::count();
+        $totalRevenue = Booking::sum('price');
+
+        return view('dashboard', compact('totalUsers', 'totalBookings', 'totalRevenue'));
+    }
+}
+
+=============================================================================
+API CONTROLLERS
+=============================================================================
+
+-----------------------------------------------------------------------------
+FILE: app/Http/Controllers/Api/UserController.php
+DESCRIPTION: User API (CRUD) - RESTful endpoints for mobile/JS clients
+-----------------------------------------------------------------------------
+
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+
+class UserController extends Controller
+{
+    public function index(Request $request)
+    {
+        $perPage = $request->query('per_page', 15);
+        return response()->json(User::paginate($perPage));
+    }
+
+    public function show(User $user)
+    {
+        return response()->json($user);
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'nullable|email|unique:users,email',
+            'mobile' => 'nullable|string|unique:users,mobile',
+            'password' => 'nullable|string|min:6',
+            'role' => ['nullable', Rule::in(['customer','staff','admin'])],
+            'app_version' => 'nullable|string',
+            'device_id' => 'nullable|string',
+            'meta' => 'nullable|array',
+        ]);
+
+        if (!empty($data['password'])) {
+            $data['password'] = bcrypt($data['password']);
+        }
+
+        $user = User::create($data);
+
+        return response()->json(['status' => 'created', 'user' => $user], 201);
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'email' => ['sometimes','nullable','email', Rule::unique('users','email')->ignore($user->id)],
+            'mobile' => ['sometimes','nullable','string', Rule::unique('users','mobile')->ignore($user->id)],
+            'password' => 'sometimes|nullable|string|min:6',
+            'role' => ['sometimes', Rule::in(['customer','staff','admin'])],
+            'is_active' => 'sometimes|boolean',
+            'app_version' => 'nullable|string',
+            'device_id' => 'nullable|string',
+            'meta' => 'nullable|array',
+        ]);
+
+        if (!empty($data['password'])) {
+            $data['password'] = bcrypt($data['password']);
+        }
+
+        $user->update($data);
+
+        return response()->json(['status' => 'updated', 'user' => $user]);
+    }
+
+    public function destroy(User $user)
+    {
+        $user->delete();
+        return response()->json(['status' => 'deleted']);
+    }
+
+    public function checkMobile(Request $request)
+    {
+        $v = $request->validate(['mobile' => 'required|string']);
+        $exists = User::where('mobile', $v['mobile'])->exists();
+        return response()->json(['exists' => $exists]);
+    }
+}
+
+=============================================================================
+END OF FILE
+=============================================================================
+
+USAGE NOTES:
+
+To extract individual files from this consolidated code:
+1. Copy the content for each file section (between the separator lines)
+2. Save to the appropriate path (e.g., app/Models/User.php)
+
+Key Features Implemented:
+- Role-based authentication (admin, staff, customer)
+- Service management with CRUD operations
+- Booking system with staff assignment
+- Admin dashboard with metrics
+- API endpoints for mobile/JS clients
+- Middleware for route protection
+
+Database Tables Required:
+- users (with role, mobile columns)
+- services (name, description, price, duration, image_path)
+- bookings (service_id, customer_id, staff_id, scheduled_at, price, status, notes)
+
+Routes Structure:
+- Web routes: services, auth, bookings, admin area
+- API routes: /api/users endpoints
+
+Next Steps:
+1. Run migrations: php artisan migrate
+2. Create seeders for demo data
+3. Add authorization policies
+4. Set up storage for image uploads
+5. Add frontend assets and views

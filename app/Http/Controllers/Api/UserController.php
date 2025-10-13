@@ -1,12 +1,9 @@
 <?php
-
 namespace App\Http\Controllers\Api;
-
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-
 class UserController extends Controller
 {
     public function index(Request $request)
@@ -14,12 +11,10 @@ class UserController extends Controller
         $perPage = $request->query('per_page', 15);
         return response()->json(User::paginate($perPage));
     }
-
     public function show(User $user)
     {
         return response()->json($user);
     }
-
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -32,16 +27,12 @@ class UserController extends Controller
             'device_id' => 'nullable|string',
             'meta' => 'nullable|array',
         ]);
-
         if (!empty($data['password'])) {
             $data['password'] = bcrypt($data['password']);
         }
-
         $user = User::create($data);
-
         return response()->json(['status' => 'created', 'user' => $user], 201);
     }
-
     public function update(Request $request, User $user)
     {
         $data = $request->validate([
@@ -55,22 +46,17 @@ class UserController extends Controller
             'device_id' => 'nullable|string',
             'meta' => 'nullable|array',
         ]);
-
         if (!empty($data['password'])) {
             $data['password'] = bcrypt($data['password']);
         }
-
         $user->update($data);
-
         return response()->json(['status' => 'updated', 'user' => $user]);
     }
-
     public function destroy(User $user)
     {
         $user->delete();
         return response()->json(['status' => 'deleted']);
     }
-
     public function checkMobile(Request $request)
     {
         $v = $request->validate(['mobile' => 'required|string']);

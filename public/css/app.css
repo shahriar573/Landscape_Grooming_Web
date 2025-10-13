@@ -1,0 +1,21 @@
+/* Bucolic background and gentle admin styles (public copy) */
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  background: linear-gradient(180deg, #f7fbf5 0%, #eaf6ef 50%, #f2fbf7 100%);
+  color: #0f172a;
+}
+
+.bucolic-bg {
+  background-image: url('/images/bucolic-trees.svg');
+  background-repeat: no-repeat;
+  background-position: right bottom;
+  background-size: 320px;
+  opacity: 0.95;
+}
+
+.card p { color: #334155 }
+.card h2 { color: #0b5d3b }
+
+.admin-card { border-left: 4px solid #10b981; box-shadow: 0 2px 6px rgba(2,6,23,0.04) }
+
+.surprise-btn { background: linear-gradient(90deg,#06b6d4,#7c3aed); color:white }
