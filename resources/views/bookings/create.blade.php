@@ -1,21 +1,39 @@
 @extends('layouts.app')
+
+@section('title', 'Create Booking')
+
 @section('content')
-<h3>Create Booking</h3>
-<form method="POST" action="{{ route('bookings.store') }}">
-  @csrf
-  <label>Service</label>
-  <select name="service_id" class="form-control mb-2">
-    @foreach($services as $s)
-      <option value="{{ $s->id }}" {{ isset($prefill) && $prefill == $s->id ? 'selected' : '' }}>{{ $s->name }} (৳{{ number_format($s->price,2) }})</option>
-    @endforeach
-  </select>
+<div class="card">
+  <div class="card-header">
+    <h1 class="h5 mb-0">Create Booking</h1>
+  </div>
+  <div class="card-body">
+    <form method="POST" action="{{ route('bookings.store') }}">
+      @csrf
 
-  <label>Scheduled At</label>
-  <input name="scheduled_at" type="datetime-local" class="form-control mb-2">
+      <div class="mb-3">
+        <label for="service_id" class="form-label">Service</label>
+        <select id="service_id" name="service_id" class="form-select">
+          @foreach($services as $service)
+            <option value="{{ $service->id }}" {{ isset($prefill) && (int) $prefill === $service->id ? 'selected' : '' }}>
+              {{ $service->name }} ({{ number_format($service->price, 2) }})
+            </option>
+          @endforeach
+        </select>
+      </div>
 
-  <label>Notes</label>
-  <textarea name="notes" class="form-control mb-2"></textarea>
+      <div class="mb-3">
+        <label for="scheduled_at" class="form-label">Scheduled At</label>
+        <input id="scheduled_at" name="scheduled_at" type="datetime-local" class="form-control">
+      </div>
 
-  <button class="btn btn-primary">Create Booking</button>
-</form>
+      <div class="mb-3">
+        <label for="notes" class="form-label">Notes</label>
+        <textarea id="notes" name="notes" class="form-control" rows="3"></textarea>
+      </div>
+
+      <button class="btn btn-primary">Create Booking</button>
+    </form>
+  </div>
+</div>
 @endsection
