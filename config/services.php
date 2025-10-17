@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'pollution' => [
+        'endpoint' => env('POLLUTION_API_ENDPOINT'),
+        'api_key' => env('POLLUTION_API_KEY'),
+    ],
+
 ];

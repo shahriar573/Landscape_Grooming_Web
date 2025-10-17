@@ -1,9 +1,14 @@
 <?php
+
 namespace App\Models;
+
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
@@ -64,6 +69,17 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if the user has a specific role.
+     *
+     * @param string $role
+     * @return bool
+     */
+    public function hasRole(string $role): bool
+    {
+        return $this->role === $role;
+    }
+
+    /**
      * Bookings made by this user as a customer
      */
     public function customerBookings()
@@ -77,5 +93,32 @@ class User extends Authenticatable
     public function staffBookings()
     {
         return $this->hasMany(\App\Models\Booking::class, 'staff_id');
+    }
+
+    public function ownedVendors(): HasMany
+    {
+        return $this->hasMany(Vendor::class, 'owner_id');
+    }
+
+    public function vendorCollaborations(): BelongsToMany
+    {
+        return $this->belongsToMany(Vendor::class, 'vendor_collaborators')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    public function collabSessionsStarted(): HasMany
+    {
+        return $this->hasMany(CollabSession::class, 'started_by');
+    }
+
+    public function collabEventsAuthored(): HasMany
+    {
+        return $this->hasMany(CollabEvent::class, 'actor_id');
+    }
+
+    public function vendorRevisionsAuthored(): HasMany
+    {
+        return $this->hasMany(VendorRevision::class, 'created_by');
     }
 }
