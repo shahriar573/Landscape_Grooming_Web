@@ -8,7 +8,8 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="h3">🔧 Admin Dashboard</h1>
             <div class="btn-group">
-                <a href="{{ route('admin.services') }}" class="btn btn-primary">Manage Services</a>
+                <a href="{{ route('admin.bookings') }}" class="btn btn-warning">Bookings</a>
+                <a href="{{ route('admin.services') }}" class="btn btn-primary">Services</a>
                 <a href="{{ route('admin.billing') }}" class="btn btn-success">Billing</a>
                 <a href="{{ route('admin.users') }}" class="btn btn-info">Users</a>
             </div>
