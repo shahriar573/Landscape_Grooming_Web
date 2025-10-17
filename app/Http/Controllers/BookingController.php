@@ -3,11 +3,12 @@ namespace App\Http\Controllers;
 use App\Models\Booking;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\StaffWorkloadBalancer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 class BookingController extends Controller
 {
-    public function __construct()
+    public function __construct(private StaffWorkloadBalancer $workloadBalancer)
     {
         $this->middleware('auth')->except(['index', 'show']);
     }
@@ -44,7 +45,7 @@ class BookingController extends Controller
             'notes' => 'nullable|string|max:2000'
         ]);
         $service = Service::findOrFail($data['service_id']);
-        Booking::create([
+        $booking = Booking::create([
             'service_id' => $service->id,
             'customer_id' => Auth::id(),
             'scheduled_at' => $data['scheduled_at'],
@@ -52,8 +53,26 @@ class BookingController extends Controller
             'notes' => $data['notes'] ?? null,
             'status' => 'pending',
         ]);
+
+        $booking->load('service');
+
+        if ($booking->service) {
+            $this->workloadBalancer->rebalanceForService($booking->service);
+        }
+
+        // Refresh the booking to get the latest status after rebalancing
+        $booking->refresh();
+
+        // If no staff could be assigned, the booking remains pending.
+        // In this case, we should not keep the booking and inform the user.
+        if ($booking->status === 'pending') {
+            $booking->delete();
+            return redirect()->back()
+                ->with('error', 'We\'re sorry, but no staff are available for the selected service at this time. Please try a different service or time.');
+        }
+
         return redirect()->route('bookings.index')
-            ->with('status', 'Booking created. Admin will assign staff.');
+            ->with('status', 'Booking created and staff assigned successfully!');
     }
     public function edit(Booking $booking)
     {
@@ -65,6 +84,7 @@ class BookingController extends Controller
     public function update(Request $request, Booking $booking)
     {
         $this->authorizeAction($booking);
+        $originalServiceId = $booking->service_id;
         $data = $request->validate([
             'service_id' => 'required|exists:services,id',
             'scheduled_at' => 'required|date|after:now',
@@ -73,6 +93,19 @@ class BookingController extends Controller
             'status' => 'nullable|in:pending,confirmed,in_progress,completed,cancelled'
         ]);
         $booking->update($data);
+
+        $booking->refresh()->load('service');
+
+        if ($originalServiceId && $originalServiceId !== $booking->service_id) {
+            $originalService = Service::find($originalServiceId);
+            if ($originalService) {
+                $this->workloadBalancer->rebalanceForService($originalService);
+            }
+        }
+
+        if ($booking->service) {
+            $this->workloadBalancer->rebalanceForService($booking->service);
+        }
         return redirect()->route('bookings.index')->with('status', 'Booking updated.');
     }
     public function destroy(Booking $booking)
@@ -87,8 +120,17 @@ class BookingController extends Controller
     public function assignStaff(Request $request, Booking $booking)
     {
         if (Auth::user()->role !== 'admin') abort(403);
-        $data = $request->validate(['staff_id' => 'required|exists:users,id']);
-        $booking->update(['staff_id' => $data['staff_id'], 'status' => 'confirmed']);
+        $data = $request->validate(['staff_id' => 'nullable|exists:users,id']);
+        $booking->update([
+            'staff_id' => $data['staff_id'] ?? null,
+            'status' => 'confirmed'
+        ]);
+
+        $booking->refresh()->load('service');
+
+        if ($booking->service) {
+            $this->workloadBalancer->rebalanceForService($booking->service);
+        }
         return redirect()->route('bookings.index')->with('status', 'Staff assigned.');
     }
     protected function authorizeAction(Booking $booking)
