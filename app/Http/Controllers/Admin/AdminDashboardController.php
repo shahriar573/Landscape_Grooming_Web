@@ -100,7 +100,16 @@ class AdminDashboardController extends Controller
             }])
             ->paginate(15);
 
-        return view('admin.services.index', compact('services'));
+        // Metrics used by the view; keep them schema-safe (no dependency on optional columns)
+        $totalServices = Service::count();
+        // If there is no is_active column, treat all as active for display purposes
+        $activeServices = $totalServices;
+        $totalBookings = Booking::count();
+        $avgServicePrice = (float) (Service::avg('price') ?? 0);
+
+        return view('admin.services.index', compact(
+            'services', 'totalServices', 'activeServices', 'totalBookings', 'avgServicePrice'
+        ));
     }
 
     public function billing()

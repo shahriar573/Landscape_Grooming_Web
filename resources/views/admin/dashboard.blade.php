@@ -184,6 +184,20 @@
             </div>
         </div>
 
+        <!-- Full Bookings List (compact) -->
+        <div class="row mt-4">
+            <div class="col-12">
+                @php
+                    // If a $bookings variable wasn't passed by the controller, build a compact fallback list
+                    $bookings = isset($bookings) ? $bookings : \App\Models\Booking::with(['service','customer','staff'])->latest()->paginate(10);
+                @endphp
+                @include('admin.bookings._table', ['bookings' => $bookings])
+                <div class="mt-2 text-end">
+                    <a href="{{ route('admin.bookings') }}" class="btn btn-outline-secondary btn-sm">Open full bookings page</a>
+                </div>
+            </div>
+        </div>
+
         <!-- Staff Performance -->
         @php
             $staffStatsCollection = $staffStats ?? collect([]);
